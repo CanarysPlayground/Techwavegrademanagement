@@ -74,8 +74,10 @@ func (r *EnrollmentRepository) Update(id string, enrollment *models.Enrollment) 
 		return ErrNotFound
 	}
 
-	enrollment.ID = id
-	r.enrollments[id] = enrollment
+	// Create a copy to avoid modifying the input
+	updated := *enrollment
+	updated.ID = id
+	r.enrollments[id] = &updated
 	return nil
 }
 

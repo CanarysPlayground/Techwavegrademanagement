@@ -102,7 +102,8 @@ func (h *EnrollmentHandler) UpdateEnrollment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Update timestamp
+	// Update timestamp and set ID
+	enrollment.ID = id
 	enrollment.UpdatedAt = time.Now()
 
 	// Update the enrollment
