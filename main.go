@@ -1,3 +1,5 @@
+// Package main provides the entry point for the Grade Management API server.
+// This RESTful API manages student enrollments in courses with full CRUD operations.
 package main
 
 import (
@@ -10,6 +12,14 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// main initializes and starts the Grade Management API server.
+// It sets up the enrollment repository, handlers, and HTTP routes.
+// The server listens on port 8080 by default.
+//
+// Example usage:
+//
+//	go run main.go
+//	# Server starts on http://localhost:8080
 func main() {
 	// Initialize repository
 	enrollmentRepo := repository.NewEnrollmentRepository()
