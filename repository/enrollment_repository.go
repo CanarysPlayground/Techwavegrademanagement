@@ -24,7 +24,7 @@ var (
 // Note: This is an in-memory implementation. Data will be lost on server restart.
 // For production use, replace with persistent storage (database, Redis, etc.).
 type EnrollmentRepository struct {
-	mu          sync.RWMutex                 // Protects concurrent access to enrollments map
+	mu          sync.RWMutex                  // Protects concurrent access to enrollments map
 	enrollments map[string]*models.Enrollment // In-memory storage indexed by enrollment ID
 }
 

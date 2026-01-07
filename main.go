@@ -37,7 +37,7 @@ func main() {
 
 	// API routes with /api prefix
 	apiRouter := router.PathPrefix("/api").Subrouter()
-	
+
 	// Enrollment routes
 	apiRouter.HandleFunc("/enrollments", enrollmentHandler.CreateEnrollment).Methods("POST")
 	apiRouter.HandleFunc("/enrollments", enrollmentHandler.GetAllEnrollments).Methods("GET")
