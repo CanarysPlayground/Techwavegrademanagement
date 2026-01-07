@@ -1,0 +1,376 @@
+openapi: 3.0.3
+info:
+  title: Grade Management API - Enrollment Service
+  description: |
+    API for managing student enrollments in courses with Redis caching for performance optimization.
+    
+    ## Features
+    - Complete CRUD operations for enrollments
+    - Redis caching with 5-minute TTL
+    - Cache status headers for debugging
+    - Graceful degradation when Redis unavailable
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@techwave.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.techwave.com
+    description: Production server
+
+tags:
+  - name: enrollments
+    description: Student enrollment management operations
+  - name: health
+    description: Service health and status checks
+
+paths:
+  /:
+    get:
+      summary: Root endpoint
+      description: Returns basic API information and cache status
+      responses:
+        '200':
+          description: API information
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Grade Management API - Cache: enabled"
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns service health status including Redis connectivity
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/enrollments:
+    get:
+      summary: Get all enrollments
+      description: Retrieves a list of all student enrollments
+      tags:
+        - enrollments
+      responses:
+        '200':
+          description: List of enrollments retrieved successfully
+          headers:
+            X-Cache-Status:
+              $ref: '#/components/headers/X-Cache-Status'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Enrollment'
+    
+    post:
+      summary: Create a new enrollment
+      description: Creates a new student enrollment in a course
+      tags:
+        - enrollments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentRequest'
+      responses:
+        '201':
+          description: Enrollment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '400':
+          description: Invalid request payload or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidPayload:
+                  value:
+                    error: "Invalid request payload"
+                validationError:
+                  value:
+                    error: "student_id is required"
+        '409':
+          description: Enrollment already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Enrollment already exists"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Failed to create enrollment"
+
+  /api/enrollments/{id}:
+    get:
+      summary: Get enrollment by ID
+      description: |
+        Retrieves a specific enrollment by its UUID. 
+        Implements cache-aside pattern with Redis caching for performance.
+        Check X-Cache-Status header to see if response was served from cache.
+      tags:
+        - enrollments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the enrollment
+          schema:
+            type: string
+            format: uuid
+            example: "a81eee8a-8ef0-46c9-aefa-e3f14ff1303c"
+      responses:
+        '200':
+          description: Enrollment retrieved successfully
+          headers:
+            X-Cache-Status:
+              $ref: '#/components/headers/X-Cache-Status'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '404':
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Enrollment not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Failed to retrieve enrollment"
+    
+    put:
+      summary: Update an enrollment
+      description: |
+        Updates an existing enrollment. 
+        Automatically invalidates cache for the updated enrollment.
+      tags:
+        - enrollments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the enrollment to update
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentRequest'
+      responses:
+        '200':
+          description: Enrollment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '400':
+          description: Invalid request payload or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Enrollment not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Failed to update enrollment"
+    
+    delete:
+      summary: Delete an enrollment
+      description: |
+        Deletes an enrollment by ID.
+        Automatically invalidates cache for the deleted enrollment.
+      tags:
+        - enrollments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the enrollment to delete
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Enrollment deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Enrollment deleted successfully"
+        '404':
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Enrollment not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Failed to delete enrollment"
+
+components:
+  headers:
+    X-Cache-Status:
+      description: |
+        Indicates whether the response was served from cache or database.
+        - HIT: Response served from Redis cache (< 100ms expected)
+        - MISS: Response served from database, then cached
+        - SKIP: Caching disabled or not applicable for this endpoint
+      schema:
+        type: string
+        enum: [HIT, MISS, SKIP]
+      example: HIT
+
+  schemas:
+    Enrollment:
+      type: object
+      required:
+        - id
+        - student_id
+        - course_id
+        - enrollment_date
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the enrollment
+          example: "a81eee8a-8ef0-46c9-aefa-e3f14ff1303c"
+        student_id:
+          type: string
+          description: ID of the enrolled student
+          example: "42"
+        course_id:
+          type: string
+          description: ID of the course
+          example: "101"
+        enrollment_date:
+          type: string
+          format: date-time
+          description: Date when the enrollment was created
+          example: "2026-01-07T10:30:00Z"
+        status:
+          type: string
+          enum: [pending, active, completed]
+          description: Current enrollment status
+          example: "active"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when enrollment was created
+          example: "2026-01-07T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when enrollment was last updated
+          example: "2026-01-07T10:30:00Z"
+
+    EnrollmentRequest:
+      type: object
+      required:
+        - student_id
+        - course_id
+        - status
+      properties:
+        student_id:
+          type: string
+          description: ID of the student to enroll
+          example: "42"
+        course_id:
+          type: string
+          description: ID of the course
+          example: "101"
+        status:
+          type: string
+          enum: [pending, active, completed]
+          description: Initial enrollment status
+          example: "pending"
+        enrollment_date:
+          type: string
+          format: date-time
+          description: Optional enrollment date (defaults to current time if not provided)
+          example: "2026-01-07T10:30:00Z"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Invalid request payload"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - cache
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall service health status
+          example: "healthy"
+        cache:
+          type: boolean
+          description: Whether Redis cache is enabled and connected
+          example: true
+        redis:
+          type: boolean
+          description: Redis connection status (only present if cache is enabled)
+          example: true

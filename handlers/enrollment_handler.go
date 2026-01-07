@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"techwave/cache"
 	"techwave/models"
 	"techwave/repository"
 	"time"
@@ -13,13 +15,15 @@ import (
 
 // EnrollmentHandler handles HTTP requests for enrollments
 type EnrollmentHandler struct {
-	repo *repository.EnrollmentRepository
+	repo  *repository.EnrollmentRepository
+	cache *cache.EnrollmentCache
 }
 
 // NewEnrollmentHandler creates a new enrollment handler
-func NewEnrollmentHandler(repo *repository.EnrollmentRepository) *EnrollmentHandler {
+func NewEnrollmentHandler(repo *repository.EnrollmentRepository, cache *cache.EnrollmentCache) *EnrollmentHandler {
 	return &EnrollmentHandler{
-		repo: repo,
+		repo:  repo,
+		cache: cache,
 	}
 }
 
@@ -62,10 +66,25 @@ func (h *EnrollmentHandler) CreateEnrollment(w http.ResponseWriter, r *http.Requ
 }
 
 // GetEnrollment handles GET /api/enrollments/{id}
+// Implements cache-aside pattern with Redis caching
 func (h *EnrollmentHandler) GetEnrollment(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// Try to get from cache first
+	if h.cache != nil {
+		cachedEnrollment, err := h.cache.Get(id)
+		if err == nil && cachedEnrollment != nil {
+			// Cache HIT
+			w.Header().Set("X-Cache-Status", "HIT")
+			respondWithJSON(w, http.StatusOK, cachedEnrollment)
+			return
+		}
+		// Cache MISS - continue to database
+		log.Printf("Cache MISS for enrollment ID: %s", id)
+	}
+
+	// Get from database
 	enrollment, err := h.repo.GetByID(id)
 	if err != nil {
 		if err == repository.ErrNotFound {
@@ -76,6 +95,16 @@ func (h *EnrollmentHandler) GetEnrollment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Store in cache for next time (cache-aside pattern)
+	if h.cache != nil {
+		if err := h.cache.Set(enrollment); err != nil {
+			log.Printf("Failed to cache enrollment: %v", err)
+			// Don't fail the request if caching fails
+		}
+	}
+
+	// Set cache status to MISS
+	w.Header().Set("X-Cache-Status", "MISS")
 	respondWithJSON(w, http.StatusOK, enrollment)
 }
 
@@ -116,6 +145,13 @@ func (h *EnrollmentHandler) UpdateEnrollment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Invalidate cache after update
+	if h.cache != nil {
+		if err := h.cache.Delete(id); err != nil {
+			log.Printf("Failed to invalidate cache for enrollment %s: %v", id, err)
+		}
+	}
+
 	respondWithJSON(w, http.StatusOK, enrollment)
 }
 
@@ -131,6 +167,13 @@ func (h *EnrollmentHandler) DeleteEnrollment(w http.ResponseWriter, r *http.Requ
 		}
 		respondWithError(w, http.StatusInternalServerError, "Failed to delete enrollment")
 		return
+	}
+
+	// Invalidate cache after delete
+	if h.cache != nil {
+		if err := h.cache.Delete(id); err != nil {
+			log.Printf("Failed to invalidate cache for enrollment %s: %v", id, err)
+		}
 	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Enrollment deleted successfully"})
