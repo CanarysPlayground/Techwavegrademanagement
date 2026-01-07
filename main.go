@@ -24,9 +24,9 @@ type Enrollment struct {
 
 // EnrollmentStore manages enrollment data in memory with thread-safe operations
 type EnrollmentStore struct {
-	mu          sync.RWMutex            // Mutex for thread-safe access
-	enrollments map[int]*Enrollment     // In-memory storage of enrollments
-	nextID      int                     // Counter for generating unique IDs
+	mu          sync.RWMutex        // Mutex for thread-safe access
+	enrollments map[int]*Enrollment // In-memory storage of enrollments
+	nextID      int                 // Counter for generating unique IDs
 }
 
 // Global store instance
