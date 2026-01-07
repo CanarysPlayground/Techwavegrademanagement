@@ -131,7 +131,7 @@ func CreateEnrollmentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAllEnrollmentsHandler handles GET /api/enrollments
-// Returns all enrollments in the system
+// Returns all enrollments in the system sorted by ID
 func GetAllEnrollmentsHandler(w http.ResponseWriter, r *http.Request) {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
@@ -140,6 +140,15 @@ func GetAllEnrollmentsHandler(w http.ResponseWriter, r *http.Request) {
 	enrollments := make([]*Enrollment, 0, len(store.enrollments))
 	for _, enrollment := range store.enrollments {
 		enrollments = append(enrollments, enrollment)
+	}
+
+	// Sort enrollments by ID for consistent ordering
+	for i := 0; i < len(enrollments); i++ {
+		for j := i + 1; j < len(enrollments); j++ {
+			if enrollments[i].ID > enrollments[j].ID {
+				enrollments[i], enrollments[j] = enrollments[j], enrollments[i]
+			}
+		}
 	}
 
 	sendJSONResponse(w, http.StatusOK, enrollments)
@@ -230,7 +239,7 @@ func UpdateEnrollmentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteEnrollmentHandler handles DELETE /api/enrollments/{id}
-// Deletes an enrollment by ID
+// Deletes an enrollment by ID and returns 204 No Content
 func DeleteEnrollmentHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract ID from URL
 	vars := mux.Vars(r)
@@ -252,9 +261,8 @@ func DeleteEnrollmentHandler(w http.ResponseWriter, r *http.Request) {
 
 	delete(store.enrollments, id)
 
-	sendJSONResponse(w, http.StatusOK, map[string]string{
-		"message": fmt.Sprintf("Enrollment with ID %d deleted successfully", id),
-	})
+	// Return 204 No Content for successful deletion
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // HealthCheckHandler handles GET /
